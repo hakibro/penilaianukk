@@ -1,0 +1,215 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String              @id @default(cuid())
+  email          String              @unique
+  name           String
+  password       String
+  role           UserRole            @default(USER)
+  jurusanId      String?
+  jurusan        Jurusan?            @relation(fields: [jurusanId], references: [id], onDelete: SetNull)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  adminJurusans  AdminJurusan[]
+  penilais       Penilai[]
+  penilaianAspek PenilaianAspek[]
+  penilaianKriteria PenilaianKriteria[]
+
+  @@index([jurusanId])
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN_JURUSAN
+  PENILAI
+  USER
+}
+
+model Jurusan {
+  id            String           @id @default(cuid())
+  nama          String           @unique
+  kode          String           @unique
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  users         User[]
+  admins        AdminJurusan[]
+  penilais      Penilai[]
+  siswas        Siswa[]
+  aspeks        AspekPenilaian[]
+
+  @@map("jurusan")
+}
+
+model AdminJurusan {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jurusanId String
+  jurusan   Jurusan  @relation(fields: [jurusanId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, jurusanId])
+  @@map("admin_jurusan")
+}
+
+model KriteriaPenilaian {
+  id          String             @id @default(cuid())
+  nama        String
+  nilaiMin    Int                @default(0)
+  nilaiMax    Int                @default(100)
+  keterangan  String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  penilaianKriterias PenilaianKriteria[]
+
+  @@map("kriteria_penilaian")
+}
+
+model Siswa {
+  id              String            @id @default(cuid())
+  idperson        String            @unique
+  nama            String
+  gender          String
+  lahirTempat     String            @default("")
+  lahirTanggal    String            @default("")
+  phone           String            @default("")
+  idkelasFormal   String            @default("")
+  kelasFormal     String            @default("")
+  asramaPondok    String            @default("")
+  kamarPondok     String            @default("")
+  tingkatDiniyah  String            @default("")
+  kelasDiniyah    String            @default("")
+  siswaStatus     String            @default("1")
+  personStatus    String            @default("1")
+  jurusanId       String
+  jurusan         Jurusan           @relation(fields: [jurusanId], references: [id], onDelete: Cascade)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  penilaianAspeks PenilaianAspek[]
+
+  @@index([jurusanId])
+  @@map("siswa")
+}
+
+model Penilai {
+  id          String             @id @default(cuid())
+  nama        String
+  jenis       JenisPenilai
+  instansi    String?
+  jurusanId   String
+  jurusan     Jurusan            @relation(fields: [jurusanId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  penilaianAspeks   PenilaianAspek[]
+  penilaianKriterias PenilaianKriteria[]
+
+  @@index([jurusanId])
+  @@map("penilai")
+}
+
+enum JenisPenilai {
+  INTERNAL
+  EKSTERNAL
+}
+
+model AspekPenilaian {
+  id          String            @id @default(cuid())
+  nama        String
+  jurusanId   String
+  jurusan     Jurusan           @relation(fields: [jurusanId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  elemens     ElemenKompetensi[]
+
+  @@index([jurusanId])
+  @@map("aspek_penilaian")
+}
+
+model ElemenKompetensi {
+  id          String               @id @default(cuid())
+  nama        String
+  bobot       Float
+  aspekId     String
+  aspek       AspekPenilaian      @relation(fields: [aspekId], references: [id])
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  subElemens  SubElemenKompetensi[]
+  penilaianAspeks PenilaianAspek[]
+
+  @@index([aspekId])
+  @@map("elemen_kompetensi")
+}
+
+model SubElemenKompetensi {
+  id        String              @id @default(cuid())
+  nama      String
+  elemenId  String
+  elemen    ElemenKompetensi    @relation(fields: [elemenId], references: [id])
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([elemenId])
+  @@map("sub_elemen_kompetensi")
+}
+
+model PenilaianAspek {
+  id                String            @id @default(cuid())
+  siswaId           String
+  siswa             Siswa             @relation(fields: [siswaId], references: [id])
+  penilaiId         String
+  penilai           Penilai           @relation(fields: [penilaiId], references: [id])
+  elemenId          String
+  elemen            ElemenKompetensi  @relation(fields: [elemenId], references: [id])
+  nilai             Float
+  userId            String?
+  user              User?             @relation(fields: [userId], references: [id])
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  penilaianKriterias PenilaianKriteria[]
+
+  @@index([siswaId])
+  @@index([penilaiId])
+  @@index([elemenId])
+  @@map("penilaian_aspek")
+}
+
+model PenilaianKriteria {
+  id               String            @id @default(cuid())
+  penilaianAspekId String
+  penilaianAspek   PenilaianAspek    @relation(fields: [penilaianAspekId], references: [id], onDelete: Cascade)
+  kriteriaId       String
+  kriteria         KriteriaPenilaian @relation(fields: [kriteriaId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             User?             @relation(fields: [userId], references: [id])
+  penilaiId        String?
+  penilai          Penilai?          @relation(fields: [penilaiId], references: [id])
+  isChecked        Boolean           @default(false)
+  nilai            Int?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([penilaianAspekId])
+  @@index([kriteriaId])
+  @@map("penilaian_kriteria")
+}
