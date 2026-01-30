@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -33,14 +33,9 @@ export default function LoginPage() {
 			e.preventDefault();
 		}
 
-		if (isSubmitting.current || isLoadingRef.current || isRedirecting.current) {
-			return;
-		}
+		if (isLoading) return;
 
 		setError("");
-		isLoadingRef.current = true;
-		isSubmitting.current = true;
-		isRedirecting.current = true;
 		setIsLoading(true);
 
 		try {
@@ -91,26 +86,8 @@ export default function LoginPage() {
 		}
 	};
 
-	const handleDemoLogin = async (
-		role: "SUPERADMIN" | "ADMIN_JURUSAN" | "PENILAI",
-	) => {
-		const demoCredentials: Record<string, { email: string; password: string }> =
-			{
-				SUPERADMIN: { email: "superadmin@ukk.id", password: "demo123" },
-				ADMIN_JURUSAN: { email: "admin@ukk.id", password: "demo123" },
-				PENILAI: { email: "penilai@ukk.id", password: "demo123" },
-			};
-
-		const creds = demoCredentials[role];
-		setEmail(creds.email);
-		setPassword(creds.password);
-
-		// Call handleLogin with null event
-		await handleLogin(null);
-	};
-
 	return (
-		<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
+		<div className="min-h-screen flex items-center justify-center bg-linear-to-br from-background to-muted p-4">
 			<Card className="w-full max-w-md shadow-2xl">
 				<CardHeader className="space-y-1 text-center">
 					<div className="flex justify-center mb-4">
@@ -165,47 +142,6 @@ export default function LoginPage() {
 							{isLoading ? "Masuk..." : "Masuk"}
 						</Button>
 					</form>
-
-					{/* <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                Demo Login
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleDemoLogin('SUPERADMIN')}
-              disabled={isLoading || isSubmitting.current}
-            >
-              Superadmin
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleDemoLogin('ADMIN_JURUSAN')}
-              disabled={isLoading || isSubmitting.current}
-            >
-              Admin
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleDemoLogin('PENILAI')}
-              disabled={isLoading || isSubmitting.current}
-            >
-              Penilai
-            </Button>
-          </div> */}
 				</CardContent>
 				<CardFooter className="flex flex-col space-y-2">
 					<Link

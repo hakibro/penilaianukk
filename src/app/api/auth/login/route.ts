@@ -1,61 +1,60 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import bcrypt from "bcryptjs"; // 1. Import bcrypt
 
 export async function POST(request: NextRequest) {
-  try {
-    const { email, password } = await request.json();
+	try {
+		const { email, password } = await request.json();
 
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email dan password diperlukan' },
-        { status: 400 }
-      );
-    }
+		if (!email || !password) {
+			return NextResponse.json(
+				{ error: "Email dan password diperlukan" },
+				{ status: 400 },
+			);
+		}
 
-    // Find user by email
-    const user = await db.user.findUnique({
-      where: { email },
-    });
+		const user = await db.user.findUnique({
+			where: { email },
+		});
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Email atau password salah' },
-        { status: 401 }
-      );
-    }
+		if (!user) {
+			return NextResponse.json(
+				{ error: "Email atau password salah" },
+				{ status: 401 },
+			);
+		}
 
-    // Simple password check (in production, use bcrypt or similar)
-    if (user.password !== password) {
-      return NextResponse.json(
-        { error: 'Email atau password salah' },
-        { status: 401 }
-      );
-    }
+		// 2. Gunakan bcrypt.compare, jangan pakai "!=="
+		const isPasswordMatch = await bcrypt.compare(password, user.password);
 
-    // Return user without password
-    const { password: _, ...userWithoutPassword } = user;
+		if (!isPasswordMatch) {
+			return NextResponse.json(
+				{ error: "Email atau password salah" },
+				{ status: 401 },
+			);
+		}
 
-    // Create response
-    const response = NextResponse.json({
-      success: true,
-      user: userWithoutPassword,
-    });
+		const { password: _, ...userWithoutPassword } = user;
 
-    // Set cookie for middleware
-    response.cookies.set('user', JSON.stringify(userWithoutPassword), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: '/',
-    });
+		const response = NextResponse.json({
+			success: true,
+			user: userWithoutPassword,
+		});
 
-    return response;
-  } catch (error) {
-    console.error('Login error:', error);
-    return NextResponse.json(
-      { error: 'Terjadi kesalahan saat login' },
-      { status: 500 }
-    );
-  }
+		response.cookies.set("user", JSON.stringify(userWithoutPassword), {
+			httpOnly: true,
+			secure: process.env.NODE_ENV === "production",
+			sameSite: "lax",
+			maxAge: 60 * 60 * 24 * 7,
+			path: "/",
+		});
+
+		return response;
+	} catch (error) {
+		console.error("Login error:", error);
+		return NextResponse.json(
+			{ error: "Terjadi kesalahan saat login" },
+			{ status: 500 },
+		);
+	}
 }
