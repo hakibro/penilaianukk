@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 export async function DELETE(
 	request: NextRequest,
@@ -69,7 +70,7 @@ export async function PATCH(
 
 			// Hanya update password jika diisi
 			if (password && password.trim() !== "") {
-				userData.password = password;
+				userData.password = await bcrypt.hash(password, 10);
 			}
 
 			await tx.user.update({
