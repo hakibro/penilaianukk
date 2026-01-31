@@ -29,6 +29,8 @@ import {
 	RefreshCw,
 	AlertCircle,
 	AlertTriangle,
+	ChevronDown,
+	ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -90,16 +92,26 @@ export default function PenilaianPage() {
 		Record<string, string>
 	>({});
 
+	// State untuk Collapsible (Buka/Tutup Rincian Elemen)
+	const [openAspects, setOpenAspects] = useState<Record<string, boolean>>({});
+
 	const [assessmentMode, setAssessmentMode] = useState<"number" | "kriteria">(
 		"kriteria",
 	);
 
 	// === LOGIKA VALIDASI: Cek apakah semua aspek sudah bernilai ===
-	// Didefinisikan di sini agar setiap render nilai di-update
 	const incompleteCount = aspeks.filter(
 		(aspek) => !aspectScores[aspek.id] || aspectScores[aspek.id] === 0,
 	).length;
 	const isAllFilled = incompleteCount === 0;
+
+	// Handler Toggle Collapsible
+	const toggleAspek = (aspekId: string) => {
+		setOpenAspects((prev) => ({
+			...prev,
+			[aspekId]: !prev[aspekId],
+		}));
+	};
 
 	useEffect(() => {
 		fetchData();
@@ -350,7 +362,7 @@ export default function PenilaianPage() {
 	// === PERUBAHAN: MENGHILANGKAN BOBOT (Rata-rata Sederhana) ===
 	const calculateTotalScore = () => {
 		let totalScore = 0;
-		let elementCount = 0; // Menggunakan nama variabel berbeda agar tidak bentrok
+		let elementCount = 0;
 
 		aspeks.forEach((aspek) => {
 			aspek.elemens.forEach((elemen) => {
@@ -535,129 +547,153 @@ export default function PenilaianPage() {
 						</Alert>
 					) : (
 						<div className="space-y-6">
-							{aspeks.map((aspek) => (
-								<Card
-									key={aspek.id}
-									id={`aspek-${aspek.id}`}
-									className="rounded-2xl">
-									<CardHeader>
-										<div className="flex items-center justify-between">
-											<div className="flex flex-col items-start gap-2">
-												<CardTitle className="text-xl">{aspek.nama}</CardTitle>
-												{checkedKriterias[aspek.id] && (
-													<CheckCircle className="h-5 w-5 text-primary" />
-												)}
-												<CardDescription>
-													Penilaian Global Aspek & Rincian Elemen
-												</CardDescription>
-											</div>
-											{/* Input Nilai */}
-											<div className="flex flex-col items-center justify-center min-w-[140px] pl-6 md:border-l border-slate-200">
-												<Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-													Nilai Aspek
-												</Label>
-												<div className="relative group flex-shrink-0">
-													<Input
-														type="number"
-														min={0}
-														max={100}
-														value={aspectScores[aspek.id] ?? ""}
-														disabled={isAlreadyAssessed}
-														onChange={(e) =>
-															handleAspectScoreChange(
-																aspek.id,
-																Number(e.target.value) || 0,
-															)
-														}
-														className="w-24 text-center text-3xl font-black h-20 border-2 border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all bg-white"
-													/>
-													<div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-														0-100
-													</div>
+							{aspeks.map((aspek) => {
+								const isAspekOpen = openAspects[aspek.id] !== false; // Default Open
+								return (
+									<Card
+										key={aspek.id}
+										id={`aspek-${aspek.id}`}
+										className="rounded-2xl">
+										<CardHeader>
+											<div className="flex items-center justify-between">
+												<div className="flex flex-col items-start gap-2">
+													<CardTitle className="text-xl">
+														{aspek.nama}
+													</CardTitle>
+													{checkedKriterias[aspek.id] && (
+														<CheckCircle className="h-5 w-5 text-primary" />
+													)}
+													<CardDescription>
+														Penilaian Global Aspek & Rincian Elemen
+													</CardDescription>
 												</div>
-											</div>
-										</div>
-									</CardHeader>
-									<CardContent className="space-y-6">
-										{/* === BAGIAN 1: PENILAIAN GLOBAL ASPEK === */}
-										<div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-											{/* Kiri: Kriteria (Compact Grid) */}
-											<div className="inline-flex justify-between gap-2 flex-wrap w-full">
-												{kriterias.map((kriteria) => {
-													const active =
-														checkedKriterias[aspek.id] === kriteria.id;
-													return (
-														<button
-															key={kriteria.id}
-															type="button"
-															disabled={isAlreadyAssessed}
-															onClick={() =>
-																handleKriteriaCheck(aspek.id, kriteria.id)
-															}
-															className={`flex flex-1 items-center justify-between px-3 py-2 rounded-lg border text-xs font-semibold transition-all
-              ${
-								active
-									? "border-primary bg-primary text-primary-foreground"
-									: "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-							}`}>
-															<span className="truncate">{kriteria.nama}</span>
-															{active && (
-																<CheckCircle className="h-3 w-3 flex-shrink-0" />
-															)}
-														</button>
-													);
-												})}
-											</div>
-										</div>
-
-										{/* === BAGIAN 2: PENILAIAN PER ELEMEN === */}
-										<div className="space-y-3">
-											<Label className="text-base font-semibold text-slate-700">
-												Rincian Nilai Per Elemen
-											</Label>
-											{aspek.elemens.map((elemen) => (
-												<div
-													key={elemen.id}
-													className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors gap-3">
-													<div className="flex-1 space-y-1">
-														<div className="flex items-center gap-2">
-															<span className="font-medium text-slate-800">
-																{elemen.nama}
-															</span>
-														</div>
-
-														{elemen.subElemens.length > 0 && (
-															<div className="text-xs text-muted-foreground pl-1 space-y-1">
-																{elemen.subElemens.map((sub) => (
-																	<div key={sub.id}>• {sub.nama}</div>
-																))}
-															</div>
-														)}
-													</div>
-
-													<div className="inline-flex">
+												{/* Input Nilai */}
+												<div className="flex flex-col items-center justify-center min-w-[140px] pl-6 md:border-l border-slate-200">
+													<Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+														Nilai Aspek
+													</Label>
+													<div className="relative group flex-shrink-0">
 														<Input
 															type="number"
 															min={0}
 															max={100}
-															value={elementScores[elemen.id] ?? ""}
+															value={aspectScores[aspek.id] ?? ""}
 															disabled={isAlreadyAssessed}
 															onChange={(e) =>
-																handleElementScoreChange(
-																	elemen.id,
+																handleAspectScoreChange(
+																	aspek.id,
 																	Number(e.target.value) || 0,
 																)
 															}
-															className="text-center font-bold text-lg"
-															placeholder="0"
+															className="w-24 text-center text-3xl font-black h-20 border-2 border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all bg-white"
 														/>
+														<div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+															0-100
+														</div>
 													</div>
 												</div>
-											))}
-										</div>
-									</CardContent>
-								</Card>
-							))}
+											</div>
+										</CardHeader>
+										<CardContent className="space-y-6">
+											{/* === BAGIAN 1: PENILAIAN GLOBAL ASPEK === */}
+											<div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+												{/* Kiri: Kriteria (Compact Grid) */}
+												<div className="inline-flex justify-between gap-2 flex-wrap w-full">
+													{kriterias.map((kriteria) => {
+														const active =
+															checkedKriterias[aspek.id] === kriteria.id;
+														return (
+															<button
+																key={kriteria.id}
+																type="button"
+																disabled={isAlreadyAssessed}
+																onClick={() =>
+																	handleKriteriaCheck(aspek.id, kriteria.id)
+																}
+																className={`flex flex-1 items-center justify-between px-3 py-2 rounded-lg border text-xs font-semibold transition-all
+                  ${
+										active
+											? "border-primary bg-primary text-primary-foreground"
+											: "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+									}`}>
+																<span className="truncate">
+																	{kriteria.nama}
+																</span>
+																{active && (
+																	<CheckCircle className="h-3 w-3 flex-shrink-0" />
+																)}
+															</button>
+														);
+													})}
+												</div>
+											</div>
+
+											{/* === BAGIAN 2: COLLAPSIBLE PENILAIAN PER ELEMEN === */}
+											<div className="space-y-3">
+												{/* Header Toggle */}
+												<button
+													type="button"
+													onClick={() => toggleAspek(aspek.id)}
+													className="w-full flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors group">
+													<span className="font-semibold text-slate-700 text-sm">
+														Rincian Nilai Per Elemen
+													</span>
+													{isAspekOpen ? (
+														<ChevronUp className="h-5 w-5 text-slate-500 group-hover:text-slate-700 transition-transform" />
+													) : (
+														<ChevronDown className="h-5 w-5 text-slate-500 group-hover:text-slate-700 transition-transform" />
+													)}
+												</button>
+
+												{/* Content Collapsible */}
+												{isAspekOpen && (
+													<div className="space-y-3 pt-1">
+														{aspek.elemens.map((elemen) => (
+															<div
+																key={elemen.id}
+																className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors gap-3">
+																<div className="flex-1 space-y-1">
+																	<div className="flex items-center gap-2">
+																		<span className="font-medium text-slate-800">
+																			{elemen.nama}
+																		</span>
+																	</div>
+
+																	{elemen.subElemens.length > 0 && (
+																		<div className="text-xs text-muted-foreground pl-1 space-y-1">
+																			{elemen.subElemens.map((sub) => (
+																				<div key={sub.id}>• {sub.nama}</div>
+																			))}
+																		</div>
+																	)}
+																</div>
+
+																<div className="inline-flex">
+																	<Input
+																		type="number"
+																		min={0}
+																		max={100}
+																		value={elementScores[elemen.id] ?? ""}
+																		disabled={isAlreadyAssessed}
+																		onChange={(e) =>
+																			handleElementScoreChange(
+																				elemen.id,
+																				Number(e.target.value) || 0,
+																			)
+																		}
+																		className="text-center font-bold text-lg"
+																		placeholder="0"
+																	/>
+																</div>
+															</div>
+														))}
+													</div>
+												)}
+											</div>
+										</CardContent>
+									</Card>
+								);
+							})}
 						</div>
 					)}
 
@@ -705,15 +741,16 @@ export default function PenilaianPage() {
 											isSaving || isAlreadyAssessed || isCheckingAssessment
 										}
 										className={`
-          h-16 rounded-xl text-md font-bold
-          flex items-center justify-center gap-3
-          transition-all duration-300
-          ${
-						!isAllFilled && !isAlreadyAssessed && !isSaving
-							? "bg-slate-400 hover:bg-slate-500"
-							: "bg-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95"
-					}
-        `}>
+                    h-16 rounded-xl text-md font-bold
+                    flex items-center justify-center gap-3
+                    transition-all duration-300
+                    ${
+											!isAllFilled && !isAlreadyAssessed && !isSaving
+												? "bg-slate-400 hover:bg-slate-500"
+												: "bg-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95"
+										}
+                    focus:scale-105 focus:ring-4
+                `}>
 										{isAlreadyAssessed ? (
 											<>
 												<CheckCircle className="h-5 w-5" /> Sudah Dinilai
