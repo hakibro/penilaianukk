@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 	],
 	authors: [{ name: "Z.ai Team and Ahmad Bayhaki - designbayhaki@gmail.com" }],
 	icons: {
-		icon: "/logo.png",
+		icon: "./logo.png",
 	},
 	openGraph: {
 		title: "Z.ai Code Scaffold",
