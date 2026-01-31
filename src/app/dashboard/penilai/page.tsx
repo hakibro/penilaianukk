@@ -9,6 +9,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { ClipboardCheck, Users, CheckCircle } from "lucide-react";
+import Link from "next/link";
 
 type DashboardData = {
 	siswaPerluDinilai: number;
@@ -100,9 +101,11 @@ export default function PenilaiDashboard() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<button className="w-full rounded-xl bg-primary px-6 py-4 text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
-						Mulai Penilaian
-					</button>
+					<Link href="/dashboard/penilai/penilaian" className="block w-full">
+						<button className="w-full rounded-xl bg-primary px-6 py-4 text-primary-foreground font-medium hover:bg-primary/90 transition-colors">
+							Mulai Penilaian
+						</button>
+					</Link>
 				</CardContent>
 			</Card>
 		</div>
