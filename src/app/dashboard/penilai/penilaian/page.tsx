@@ -390,26 +390,23 @@ export default function PenilaianPage() {
 
 		if (firstIncompleteAspek) {
 			// 2. Beri peringatan
-			const confirm = window.confirm(
-				`Masih ada aspek yang belum dinilai. Tetap simpan penilaian ini?`,
+			window.confirm(
+				`Masih ada aspek yang belum dinilai. Silahkan melengkapi penilaian.`,
 			);
-
-			if (!confirm) {
-				// 3. Auto-scroll ke aspek tersebut jika user ingin mengisi kembali
-				const element = document.getElementById(
-					`aspek-${firstIncompleteAspek.id}`,
+			// 3. Auto-scroll ke aspek tersebut jika user ingin mengisi kembali
+			const element = document.getElementById(
+				`aspek-${firstIncompleteAspek.id}`,
+			);
+			if (element) {
+				element.scrollIntoView({ behavior: "smooth", block: "center" });
+				// Tambahkan efek kilat (highlight) sementara agar user tahu yang mana
+				element.classList.add("ring-2", "ring-amber-500");
+				setTimeout(
+					() => element.classList.remove("ring-2", "ring-amber-500"),
+					2000,
 				);
-				if (element) {
-					element.scrollIntoView({ behavior: "smooth", block: "center" });
-					// Tambahkan efek kilat (highlight) sementara agar user tahu yang mana
-					element.classList.add("ring-2", "ring-amber-500");
-					setTimeout(
-						() => element.classList.remove("ring-2", "ring-amber-500"),
-						2000,
-					);
-				}
-				return;
 			}
+			return;
 		}
 
 		setIsSaving(true);
@@ -585,7 +582,7 @@ export default function PenilaianPage() {
 																	Number(e.target.value) || 0,
 																)
 															}
-															className="w-24 text-center text-3xl font-black h-20 border-2 border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all bg-white"
+															className="w-24 text-center !text-3xl font-black h-20 border-2 border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all bg-white"
 														/>
 														<div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
 															0-100
