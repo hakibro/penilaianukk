@@ -15,7 +15,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Shield, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -92,7 +92,7 @@ export default function LoginPage() {
 				<CardHeader className="space-y-1 text-center">
 					<div className="flex justify-center mb-4">
 						<div className="flex h-16 w-16 items-center justify-center">
-							<img src="./logo.png" alt="" />
+							<img src="/logo.png" alt="" />
 						</div>
 					</div>
 					<CardTitle className="text-2xl font-bold">Sistem UKK</CardTitle>
