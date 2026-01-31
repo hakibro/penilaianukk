@@ -548,7 +548,7 @@ export default function PenilaianPage() {
 					) : (
 						<div className="space-y-6">
 							{aspeks.map((aspek) => {
-								const isAspekOpen = openAspects[aspek.id] !== true; // Default close
+								const isAspekOpen = !!openAspects[aspek.id]; // Default collapsed
 								return (
 									<Card
 										key={aspek.id}
