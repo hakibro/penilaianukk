@@ -150,9 +150,6 @@ export async function PUT(
 	}
 }
 
-/**
- * DELETE endpoint to remove a penilai
- */
 export async function DELETE(
 	request: NextRequest,
 	{ params }: { params: Promise<{ id: string }> },
@@ -162,10 +159,11 @@ export async function DELETE(
 		const { searchParams } = new URL(request.url);
 		const forceDelete = searchParams.get("force") === "true";
 
-		// 1. Cek keberadaan penilai
+		// 1. Cek keberadaan penilai DAN ambil userId-nya
 		const penilai = await db.penilai.findUnique({
 			where: { id },
-			include: {
+			select: {
+				userId: true, // Kita butuh ini untuk hapus di tabel User
 				_count: {
 					select: { penilaianAspeks: true },
 				},
@@ -179,7 +177,7 @@ export async function DELETE(
 			);
 		}
 
-		// 2. Jika ada penilaian dan TIDAK paksa, beri peringatan
+		// 2. Validasi data penilaian
 		if (penilai._count.penilaianAspeks > 0 && !forceDelete) {
 			return NextResponse.json(
 				{
@@ -193,28 +191,34 @@ export async function DELETE(
 		// 3. Eksekusi Penghapusan (Transaksi)
 		await db.$transaction(async (tx) => {
 			if (forceDelete) {
-				// Hapus kriteria yang terkait dengan aspek milik penilai ini
+				// Hapus data detail penilaian
 				await tx.penilaianKriteria.deleteMany({
 					where: { penilaiId: id },
 				});
 
-				// Hapus aspek penilaian milik penilai ini
 				await tx.penilaianAspek.deleteMany({
 					where: { penilaiId: id },
 				});
 			}
 
-			// Hapus data utama penilai
+			// A. Hapus data utama Penilai
 			await tx.penilai.delete({
 				where: { id },
 			});
+
+			// B. Hapus data User jika penilai ini terhubung ke akun user
+			if (penilai.userId) {
+				await tx.user.delete({
+					where: { id: penilai.userId },
+				});
+			}
 		});
 
 		return NextResponse.json({
 			success: true,
 			message: forceDelete
-				? "Penilai dan semua data terkait berhasil dihapus"
-				: "Penilai berhasil dihapus",
+				? "Penilai, User, dan semua data terkait berhasil dihapus"
+				: "Penilai dan akun User berhasil dihapus",
 		});
 	} catch (error: any) {
 		console.error("Error deleting penilai:", error);
