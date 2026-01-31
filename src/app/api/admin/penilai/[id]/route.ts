@@ -159,20 +159,67 @@ export async function DELETE(
 ) {
 	try {
 		const { id } = await params;
+		const { searchParams } = new URL(request.url);
+		const forceDelete = searchParams.get("force") === "true";
 
-		await db.penilai.delete({
+		// 1. Cek keberadaan penilai
+		const penilai = await db.penilai.findUnique({
 			where: { id },
+			include: {
+				_count: {
+					select: { penilaianAspeks: true },
+				},
+			},
+		});
+
+		if (!penilai) {
+			return NextResponse.json(
+				{ error: "Penilai tidak ditemukan" },
+				{ status: 404 },
+			);
+		}
+
+		// 2. Jika ada penilaian dan TIDAK paksa, beri peringatan
+		if (penilai._count.penilaianAspeks > 0 && !forceDelete) {
+			return NextResponse.json(
+				{
+					error: "HAS_DATA",
+					message: `Penilai ini memiliki ${penilai._count.penilaianAspeks} data penilaian.`,
+				},
+				{ status: 400 },
+			);
+		}
+
+		// 3. Eksekusi Penghapusan (Transaksi)
+		await db.$transaction(async (tx) => {
+			if (forceDelete) {
+				// Hapus kriteria yang terkait dengan aspek milik penilai ini
+				await tx.penilaianKriteria.deleteMany({
+					where: { penilaiId: id },
+				});
+
+				// Hapus aspek penilaian milik penilai ini
+				await tx.penilaianAspek.deleteMany({
+					where: { penilaiId: id },
+				});
+			}
+
+			// Hapus data utama penilai
+			await tx.penilai.delete({
+				where: { id },
+			});
 		});
 
 		return NextResponse.json({
 			success: true,
-			message: "Penilai berhasil dihapus",
+			message: forceDelete
+				? "Penilai dan semua data terkait berhasil dihapus"
+				: "Penilai berhasil dihapus",
 		});
 	} catch (error: any) {
 		console.error("Error deleting penilai:", error);
-
 		return NextResponse.json(
-			{ error: "Gagal menghapus penilai" },
+			{ error: "Gagal menghapus data secara permanen" },
 			{ status: 500 },
 		);
 	}
