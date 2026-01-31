@@ -119,7 +119,8 @@ export async function POST(request: NextRequest) {
 			return acc;
 		}, {});
 
-		const createdAspeks = [];
+		// Tambahkan tipe data explicit agar tidak dianggap 'never[]'
+		const createdAspeks: any[] = [];
 		const errors: string[] = [];
 
 		// 5. Simpan ke Database
@@ -137,14 +138,16 @@ export async function POST(request: NextRequest) {
 								subElemens:
 									e.subElemens.length > 0
 										? {
-												create: e.subElemens,
+												create: e.subElemens.map((se: any) => ({
+													nama: se.nama,
+												})),
 											}
 										: undefined,
 							})),
 						},
 					},
 				});
-				createdAspeks.push(created);
+				createdAspeks.push(created); // Sekarang tidak akan error
 			} catch (error: any) {
 				console.error(`Error creating aspek ${aspek.nama}:`, error);
 				errors.push(`Aspek "${aspek.nama}": ${error.message}`);
