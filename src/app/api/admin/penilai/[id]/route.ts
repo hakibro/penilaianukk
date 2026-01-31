@@ -82,7 +82,7 @@ export async function PUT(
 			}
 
 			if (password && password.trim() !== "") {
-				userData.password = password;
+				userData.password = await bcrypt.hash(password, 10);
 			}
 
 			if (Object.keys(userData).length > 0) {
