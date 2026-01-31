@@ -383,30 +383,42 @@ export default function PenilaianPage() {
 			return;
 		}
 
-		// 1. Cari aspek yang belum diisi
 		const firstIncompleteAspek = aspeks.find(
 			(aspek) => !aspectScores[aspek.id],
 		);
 
 		if (firstIncompleteAspek) {
-			// 2. Beri peringatan
-			window.confirm(
-				`Masih ada aspek yang belum dinilai. Silahkan melengkapi penilaian.`,
-			);
-			// 3. Auto-scroll ke aspek tersebut jika user ingin mengisi kembali
+			// 1. Tampilkan Toast
+			toast.warning("Penilaian Belum Lengkap", {
+				description: `Aspek "${firstIncompleteAspek.nama}" belum diisi. Silakan lengkapi penilaian Anda.`,
+				duration: 4000,
+			});
+
+			// 2. Cari elemen berdasarkan ID
 			const element = document.getElementById(
 				`aspek-${firstIncompleteAspek.id}`,
 			);
+
 			if (element) {
+				// Scroll ke elemen tersebut
 				element.scrollIntoView({ behavior: "smooth", block: "center" });
-				// Tambahkan efek kilat (highlight) sementara agar user tahu yang mana
-				element.classList.add("ring-2", "ring-amber-500");
-				setTimeout(
-					() => element.classList.remove("ring-2", "ring-amber-500"),
-					2000,
-				);
+
+				// Tambahkan highlight kuning/amber
+				element.classList.add("ring-4", "ring-amber-400", "duration-500");
+
+				// 3. Auto-focus ke input (Opsional tapi sangat disarankan)
+				const inputField = element.querySelector("input");
+				if (inputField) {
+					setTimeout(() => inputField.focus(), 500); // Tunggu scroll selesai sedikit
+				}
+
+				// Hilangkan highlight setelah 2 detik
+				setTimeout(() => {
+					element.classList.remove("ring-4", "ring-amber-400");
+				}, 2000);
 			}
-			return;
+
+			return; // Hentikan eksekusi submit
 		}
 
 		setIsSaving(true);
@@ -554,14 +566,48 @@ export default function PenilaianPage() {
 										<CardHeader>
 											<div className="flex items-center justify-between">
 												<div className="flex flex-col items-start gap-2">
-													<CardTitle className="text-xl">
+													<CardTitle className="text-xl flex items-center gap-2">
 														{aspek.nama}
+														{checkedKriterias[aspek.id] && (
+															<CheckCircle className="h-5 w-5 text-primary" />
+														)}
 													</CardTitle>
-													{checkedKriterias[aspek.id] && (
-														<CheckCircle className="h-5 w-5 text-primary" />
-													)}
+
 													<CardDescription>
-														Penilaian Global Aspek & Rincian Elemen
+														<div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+															{/* Kiri: Kriteria (Compact Grid) */}
+															<div className="inline-flex justify-between gap-2 flex-wrap w-full">
+																{kriterias.map((kriteria) => {
+																	const active =
+																		checkedKriterias[aspek.id] === kriteria.id;
+																	return (
+																		<button
+																			key={kriteria.id}
+																			type="button"
+																			disabled={isAlreadyAssessed}
+																			onClick={() =>
+																				handleKriteriaCheck(
+																					aspek.id,
+																					kriteria.id,
+																				)
+																			}
+																			className={`flex flex-1 items-center justify-between px-3 py-2 rounded-lg border text-xs font-semibold transition-all
+                  ${
+										active
+											? "border-primary bg-primary text-primary-foreground"
+											: "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+									}`}>
+																			<span className="truncate">
+																				{kriteria.nama}
+																			</span>
+																			{active && (
+																				<CheckCircle className="h-3 w-3 flex-shrink-0" />
+																			)}
+																		</button>
+																	);
+																})}
+															</div>
+														</div>
 													</CardDescription>
 												</div>
 												{/* Input Nilai */}
@@ -593,37 +639,6 @@ export default function PenilaianPage() {
 										</CardHeader>
 										<CardContent className="space-y-6">
 											{/* === BAGIAN 1: PENILAIAN GLOBAL ASPEK === */}
-											<div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-												{/* Kiri: Kriteria (Compact Grid) */}
-												<div className="inline-flex justify-between gap-2 flex-wrap w-full">
-													{kriterias.map((kriteria) => {
-														const active =
-															checkedKriterias[aspek.id] === kriteria.id;
-														return (
-															<button
-																key={kriteria.id}
-																type="button"
-																disabled={isAlreadyAssessed}
-																onClick={() =>
-																	handleKriteriaCheck(aspek.id, kriteria.id)
-																}
-																className={`flex flex-1 items-center justify-between px-3 py-2 rounded-lg border text-xs font-semibold transition-all
-                  ${
-										active
-											? "border-primary bg-primary text-primary-foreground"
-											: "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-									}`}>
-																<span className="truncate">
-																	{kriteria.nama}
-																</span>
-																{active && (
-																	<CheckCircle className="h-3 w-3 flex-shrink-0" />
-																)}
-															</button>
-														);
-													})}
-												</div>
-											</div>
 
 											{/* === BAGIAN 2: COLLAPSIBLE PENILAIAN PER ELEMEN === */}
 											<div className="space-y-3">

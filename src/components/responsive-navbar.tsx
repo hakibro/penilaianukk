@@ -119,8 +119,8 @@ export function ResponsiveNavbar({ user }: NavbarProps) {
 		return (
 			<div className="flex h-screen w-64 flex-col border-r bg-background">
 				<div className="flex h-16 items-center border-b px-6">
-					<Shield className="mr-2 h-6 w-6 text-primary" />
-					<span className="text-xl font-bold">Sistem UKK</span>
+					<img src="/logo.png" className="w-12 h-12" />
+					<span className="ml-4 text-xl font-bold">Sistem UKK</span>
 				</div>
 
 				<div className="flex-1 overflow-y-auto py-4 px-3">
@@ -193,8 +193,8 @@ export function ResponsiveNavbar({ user }: NavbarProps) {
 			{/* Mobile Top Bar */}
 			<div className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between border-b bg-background px-4 md:hidden">
 				<div className="flex items-center">
-					<Shield className="mr-2 h-5 w-5 text-primary" />
-					<span className="text-lg font-bold">Sistem UKK</span>
+					<img src="/logo.png" className="w-11 h-11" />
+					<span className="ml-4 text-lg font-bold">Sistem UKK</span>
 				</div>
 				<Sheet open={isOpen} onOpenChange={setIsOpen}>
 					<SheetTrigger asChild>
@@ -206,8 +206,8 @@ export function ResponsiveNavbar({ user }: NavbarProps) {
 						<div className="flex flex-col h-full py-4">
 							<div className="px-4 py-2">
 								<div className="flex items-center mb-4">
-									<Shield className="mr-2 h-6 w-6 text-primary" />
-									<span className="text-xl font-bold">Sistem UKK</span>
+									<img src="/logo.png" className="w-11 h-11" />
+									<span className="ml-4 text-lg font-bold">Sistem UKK</span>
 								</div>
 								<div className="mb-4 rounded-lg bg-muted p-3">
 									<p className="text-sm font-medium">{user?.name}</p>
