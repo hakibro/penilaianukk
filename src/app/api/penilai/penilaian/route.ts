@@ -4,7 +4,7 @@ import { getUser } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
 	try {
-		const user = await getUser(request);
+		const user = await getUser();
 
 		if (!user || user.role !== "PENILAI") {
 			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
 	try {
-		const user = await getUser(request);
+		const user = await getUser();
 
 		if (!user || user.role !== "PENILAI") {
 			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
 			siswaId,
 			penilaiId: penilai.id,
 			elemenId,
-			nilai,
+			nilai: Number(nilai),
 		}));
 
 		// 🚫 CEK APAKAH SUDAH PERNAH DINILAI

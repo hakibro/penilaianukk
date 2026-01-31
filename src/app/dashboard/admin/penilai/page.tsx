@@ -54,6 +54,7 @@ interface Penilai {
 	jenis: "INTERNAL" | "EKSTERNAL";
 	instansi: string | null;
 	jurusan: {
+		id: string;
 		nama: string;
 	};
 	user?: {
@@ -271,7 +272,7 @@ export default function PenilaiPage() {
 			instansi: penilai.instansi || "",
 			email: penilai.user?.email || "",
 			password: penilai.user?.password || "", // Include existing password
-			jurusanId: penilai.jurusanId,
+			jurusanId: penilai.jurusan.id,
 		});
 		setIsEditDialogOpen(true);
 	};
