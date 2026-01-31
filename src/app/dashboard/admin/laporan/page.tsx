@@ -86,15 +86,7 @@ export default function LaporanPage() {
 				["Jurusan", ": " + item.siswa.jurusan],
 				[],
 				["RINCIAN PENILAIAN"],
-				[
-					"No",
-					"Aspek",
-					"Elemen",
-					"Bobot",
-					"Nilai Asli",
-					"Nilai Berbobot",
-					"Penilai",
-				],
+				["No", "Aspek", "Elemen", "Nilai Asli", "Penilai"],
 			];
 
 			item.details.forEach((d, index) => {
@@ -102,9 +94,7 @@ export default function LaporanPage() {
 					(index + 1).toString(),
 					d.aspek,
 					d.elemen,
-					d.bobot.toString(),
 					d.nilai.toString(),
-					d.nilaiBobot.toString(),
 					d.penilai,
 				]);
 			});

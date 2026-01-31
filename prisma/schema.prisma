@@ -147,7 +147,7 @@ model AspekPenilaian {
 model ElemenKompetensi {
   id          String               @id @default(cuid())
   nama        String
-  bobot       Float
+  // bobot       Float
   aspekId     String
   aspek       AspekPenilaian      @relation(fields: [aspekId], references: [id])
   createdAt   DateTime            @default(now())

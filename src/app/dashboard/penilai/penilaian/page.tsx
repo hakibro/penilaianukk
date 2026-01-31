@@ -27,6 +27,8 @@ import {
 	CheckCircle,
 	Save,
 	RefreshCw,
+	AlertCircle,
+	AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -79,18 +81,29 @@ export default function PenilaianPage() {
 	const [isAlreadyAssessed, setIsAlreadyAssessed] = useState(false);
 	const [isCheckingAssessment, setIsCheckingAssessment] = useState(false);
 
-	const [scores, setScores] = useState<Record<string, number>>({});
+	// State Nilai
+	const [elementScores, setElementScores] = useState<Record<string, number>>(
+		{},
+	);
+	const [aspectScores, setAspectScores] = useState<Record<string, number>>({});
 	const [checkedKriterias, setCheckedKriterias] = useState<
 		Record<string, string>
 	>({});
+
 	const [assessmentMode, setAssessmentMode] = useState<"number" | "kriteria">(
 		"kriteria",
 	);
 
+	// === LOGIKA VALIDASI: Cek apakah semua aspek sudah bernilai ===
+	// Didefinisikan di sini agar setiap render nilai di-update
+	const incompleteCount = aspeks.filter(
+		(aspek) => !aspectScores[aspek.id] || aspectScores[aspek.id] === 0,
+	).length;
+	const isAllFilled = incompleteCount === 0;
+
 	useEffect(() => {
 		fetchData();
 
-		// Check if siswaId is in query params
 		const urlParams = new URLSearchParams(window.location.search);
 		const siswaId = urlParams.get("siswaId");
 		if (siswaId) {
@@ -98,7 +111,6 @@ export default function PenilaianPage() {
 		}
 	}, []);
 
-	// When a student is selected, set the jurusan
 	useEffect(() => {
 		if (selectedSiswa) {
 			const siswa = siswas.find((s) => s.id === selectedSiswa);
@@ -145,11 +157,15 @@ export default function PenilaianPage() {
 				const data = await res.json();
 
 				if (data.exists) {
-					setScores(data.scores || {});
+					setElementScores(data.scores || {});
+					// aspectScores dan checkedKriterias akan dihitung otomatis via useEffect di bawah
+					setAspectScores({});
+					setCheckedKriterias({});
 					setIsAlreadyAssessed(true);
 					toast.info("Siswa ini sudah pernah dinilai. Menampilkan nilai.");
 				} else {
-					setScores({});
+					setElementScores({});
+					setAspectScores({});
 					setCheckedKriterias({});
 					setIsAlreadyAssessed(false);
 				}
@@ -162,6 +178,43 @@ export default function PenilaianPage() {
 
 		checkExistingAssessment();
 	}, [selectedSiswa]);
+
+	// === PERBAIKAN: Hitung Ulang Aspek & Kriteria dari Nilai Elemen yang Sudah Ada ===
+	useEffect(() => {
+		// Hanya jalankan jika data siswa dinilai DAN data aspek sudah dimuat
+		if (!isAlreadyAssessed || aspeks.length === 0) return;
+
+		const newAspectScores: Record<string, number> = {};
+		const newCheckedKriterias: Record<string, string> = {};
+
+		aspeks.forEach((aspek) => {
+			let sum = 0;
+			let count = 0;
+
+			// Hitung rata-rata sederhana dari elemen di aspek ini
+			aspek.elemens.forEach((elemen) => {
+				const val = elementScores[elemen.id];
+				if (val !== undefined && val !== null) {
+					sum += val;
+					count++;
+				}
+			});
+
+			if (count > 0) {
+				const avg = sum / count;
+				newAspectScores[aspek.id] = avg;
+
+				// Tentukan kriteria berdasarkan nilai rata-rata
+				const kriteria = getKriteriaFromScore(avg);
+				if (kriteria) {
+					newCheckedKriterias[aspek.id] = kriteria.id;
+				}
+			}
+		});
+
+		setAspectScores(newAspectScores);
+		setCheckedKriterias(newCheckedKriterias);
+	}, [isAlreadyAssessed, elementScores, aspeks, kriterias]);
 
 	const fetchAspeks = async () => {
 		try {
@@ -186,42 +239,45 @@ export default function PenilaianPage() {
 		return matchesSearch && matchesJurusan;
 	});
 
-	const handleScoreChange = (elemenId: string, value: number) => {
-		setScores({ ...scores, [elemenId]: value });
+	const handleAspectScoreChange = (aspekId: string, value: number) => {
+		setAspectScores({ ...aspectScores, [aspekId]: value });
 
 		const kriteria = getKriteriaFromScore(value);
 
 		if (kriteria) {
 			setCheckedKriterias({
 				...checkedKriterias,
-				[elemenId]: kriteria.id,
+				[aspekId]: kriteria.id,
 			});
 		} else {
 			const next = { ...checkedKriterias };
-			delete next[elemenId];
+			delete next[aspekId];
 			setCheckedKriterias(next);
+		}
+
+		// CASCADE: Update semua nilai elemen di dalam aspek ini
+		const targetAspect = aspeks.find((a) => a.id === aspekId);
+		if (targetAspect) {
+			setElementScores((prevScores) => {
+				const newScores = { ...prevScores };
+				targetAspect.elemens.forEach((elemen) => {
+					newScores[elemen.id] = value;
+				});
+				return newScores;
+			});
 		}
 	};
 
-	const getScoreFromKriteria = (k: Kriteria) => {
-		// ambil nilai tengah dari range kriteria
-		return Math.round((k.nilaiMin + k.nilaiMax) / 2);
-	};
-
-	const getKriteriaFromScore = (value: number) => {
-		return kriterias.find((k) => value >= k.nilaiMin && value <= k.nilaiMax);
-	};
-
-	const handleKriteriaCheck = (elemenId: string, kriteriaId: string) => {
+	const handleKriteriaCheck = (aspekId: string, kriteriaId: string) => {
 		if (isAlreadyAssessed) return;
 
-		const current = checkedKriterias[elemenId];
+		const current = checkedKriterias[aspekId];
 
-		// toggle
 		if (current === kriteriaId) {
 			const next = { ...checkedKriterias };
-			delete next[elemenId];
+			delete next[aspekId];
 			setCheckedKriterias(next);
+			handleAspectScoreChange(aspekId, 0);
 			return;
 		}
 
@@ -230,34 +286,118 @@ export default function PenilaianPage() {
 
 		setCheckedKriterias({
 			...checkedKriterias,
-			[elemenId]: kriteriaId,
+			[aspekId]: kriteria.id,
 		});
 
-		setScores({
-			...scores,
-			[elemenId]: getScoreFromKriteria(kriteria),
-		});
+		const score = getScoreFromKriteria(kriteria);
+		handleAspectScoreChange(aspekId, score);
 	};
 
+	// === PERBAIKAN: Sinkronisasi Nilai Elemen ke Aspek (Two-Way Binding) ===
+	const handleElementScoreChange = (elemenId: string, value: number) => {
+		// 1. Update Nilai Elemen
+		setElementScores((prev) => ({ ...prev, [elemenId]: value }));
+
+		// 2. Cari Aspek yang memiliki elemen ini
+		const parentAspek = aspeks.find((a) =>
+			a.elemens.some((e) => e.id === elemenId),
+		);
+
+		if (parentAspek) {
+			// 3. Hitung rata-rata baru untuk Aspek tersebut berdasarkan semua elemennya
+			let sum = 0;
+			let count = 0;
+
+			parentAspek.elemens.forEach((e) => {
+				// Gunakan nilai baru jika ini elemen yang sedang diedit, gunakan nilai lama jika elemen lain
+				const score = e.id === elemenId ? value : elementScores[e.id] || 0;
+				if (score !== undefined) {
+					sum += score;
+					count++;
+				}
+			});
+
+			const newAvg = count > 0 ? sum / count : 0;
+
+			// 4. Update State Aspek Global
+			setAspectScores((prev) => ({ ...prev, [parentAspek.id]: newAvg }));
+
+			// 5. Update Kriteria berdasarkan rata-rata baru
+			const kriteria = getKriteriaFromScore(newAvg);
+			if (kriteria) {
+				setCheckedKriterias((prev) => ({
+					...prev,
+					[parentAspek.id]: kriteria.id,
+				}));
+			} else {
+				setCheckedKriterias((prev) => {
+					const next = { ...prev };
+					delete next[parentAspek.id];
+					return next;
+				});
+			}
+		}
+	};
+
+	const getScoreFromKriteria = (k: Kriteria) => {
+		return Math.round((k.nilaiMin + k.nilaiMax) / 2);
+	};
+
+	const getKriteriaFromScore = (value: number) => {
+		return kriterias.find((k) => value >= k.nilaiMin && value <= k.nilaiMax);
+	};
+
+	// === PERUBAHAN: MENGHILANGKAN BOBOT (Rata-rata Sederhana) ===
 	const calculateTotalScore = () => {
-		let total = 0;
-		let totalBobot = 0;
+		let totalScore = 0;
+		let elementCount = 0; // Menggunakan nama variabel berbeda agar tidak bentrok
 
 		aspeks.forEach((aspek) => {
 			aspek.elemens.forEach((elemen) => {
-				const score = scores[elemen.id] || 0;
-				total += score * elemen.bobot;
-				totalBobot += elemen.bobot;
+				// Ambil skor elemen, default ke 0
+				const score = elementScores[elemen.id] || 0;
+				totalScore += score;
+				elementCount++; // Hitung jumlah total elemen
 			});
 		});
 
-		return totalBobot > 0 ? total / totalBobot : 0;
+		// Kembalikan rata-rata (total skor dibagi jumlah elemen)
+		return elementCount > 0 ? totalScore / elementCount : 0;
 	};
 
 	const handleSave = async () => {
 		if (!selectedSiswa) {
 			toast.error("Silakan pilih siswa terlebih dahulu");
 			return;
+		}
+
+		// 1. Cari aspek yang belum diisi
+		const firstIncompleteAspek = aspeks.find(
+			(aspek) => !aspectScores[aspek.id],
+		);
+
+		if (firstIncompleteAspek) {
+			// 2. Beri peringatan
+			const confirm = window.confirm(
+				`Masih ada aspek yang belum dinilai. Tetap simpan penilaian ini?`,
+			);
+
+			if (!confirm) {
+				// 3. Auto-scroll ke aspek tersebut jika user ingin mengisi kembali
+				const element = document.getElementById(
+					`aspek-${firstIncompleteAspek.id}`,
+				);
+				if (element) {
+					element.scrollIntoView({ behavior: "smooth", block: "center" });
+					// Tambahkan efek kilat (highlight) sementara agar user tahu yang mana
+					element.classList.add("ring-2", "ring-amber-500");
+					setTimeout(
+						() => element.classList.remove("ring-2", "ring-amber-500"),
+						2000,
+					);
+				}
+				return;
+			}
 		}
 
 		setIsSaving(true);
@@ -268,7 +408,7 @@ export default function PenilaianPage() {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					siswaId: selectedSiswa,
-					scores,
+					scores: elementScores,
 					totalNilai: calculateTotalScore(),
 				}),
 			});
@@ -279,8 +419,8 @@ export default function PenilaianPage() {
 
 			toast.success("Penilaian berhasil disimpan");
 
-			// Reset form
-			setScores({});
+			setElementScores({});
+			setAspectScores({});
 			setCheckedKriterias({});
 			setSelectedSiswa("");
 		} catch (error: any) {
@@ -297,7 +437,7 @@ export default function PenilaianPage() {
 			<div>
 				<h1 className="text-3xl font-bold tracking-tight">Penilaian UKK</h1>
 				<p className="text-muted-foreground">
-					Beri penilaian untuk siswa yang ujian
+					Beri penilaian global untuk aspek dan detail per elemen
 				</p>
 			</div>
 
@@ -355,24 +495,15 @@ export default function PenilaianPage() {
 
 			{selectedSiswaData && (
 				<>
-					{/* STICKY HEADER */}
-					<div
-						className="
-        sticky top-0 z-10
-        bg-background/95 backdrop-blur
-        border-b
-        py-4
-      ">
+					<div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b py-4">
 						<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-							{/* Info Siswa */}
 							<div>
 								<h2 className="text-2xl font-bold">{selectedSiswaData.nama}</h2>
 							</div>
 
 							<div className="rounded-xl border bg-muted/30 p-3 text-sm">
-								<p className="font-medium mb-2">Kriteria Penilaian</p>
-
-								<div className="flex items-center justify-between flex-wrap">
+								<p className="font-medium mb-2">Rentang Kriteria</p>
+								<div className="flex items-center justify-between flex-wrap gap-2">
 									{kriterias.map((k) => (
 										<div
 											key={k.id}
@@ -386,6 +517,7 @@ export default function PenilaianPage() {
 							</div>
 						</div>
 					</div>
+
 					{isAlreadyAssessed && (
 						<Alert className="border-green-500 bg-green-500/10">
 							<AlertDescription className="text-green-700">
@@ -394,144 +526,135 @@ export default function PenilaianPage() {
 							</AlertDescription>
 						</Alert>
 					)}
+
 					{aspeks.length === 0 ? (
 						<Alert>
 							<AlertDescription>
-								Belum ada aspek penilaian untuk jurusan ini. Silakan hubungi
-								admin jurusan.
+								Belum ada aspek penilaian untuk jurusan ini.
 							</AlertDescription>
 						</Alert>
 					) : (
 						<div className="space-y-6">
 							{aspeks.map((aspek) => (
-								<Card key={aspek.id} className="rounded-2xl">
+								<Card
+									key={aspek.id}
+									id={`aspek-${aspek.id}`}
+									className="rounded-2xl">
 									<CardHeader>
-										<CardTitle>{aspek.nama}</CardTitle>
+										<div className="flex items-center justify-between">
+											<div className="flex flex-col items-start gap-2">
+												<CardTitle className="text-xl">{aspek.nama}</CardTitle>
+												{checkedKriterias[aspek.id] && (
+													<CheckCircle className="h-5 w-5 text-primary" />
+												)}
+												<CardDescription>
+													Penilaian Global Aspek & Rincian Elemen
+												</CardDescription>
+											</div>
+											{/* Input Nilai */}
+											<div className="flex flex-col items-center justify-center min-w-[140px] pl-6 md:border-l border-slate-200">
+												<Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+													Nilai Aspek
+												</Label>
+												<div className="relative group flex-shrink-0">
+													<Input
+														type="number"
+														min={0}
+														max={100}
+														value={aspectScores[aspek.id] ?? ""}
+														disabled={isAlreadyAssessed}
+														onChange={(e) =>
+															handleAspectScoreChange(
+																aspek.id,
+																Number(e.target.value) || 0,
+															)
+														}
+														className="w-24 text-center text-3xl font-black h-20 border-2 border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all bg-white"
+													/>
+													<div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+														0-100
+													</div>
+												</div>
+											</div>
+										</div>
 									</CardHeader>
-									<CardContent className="space-y-4">
-										{aspek.elemens.map((elemen) => (
-											<Card key={elemen.id} className="rounded-xl">
-												{/* ===== HEADER ===== */}
-												<CardHeader className="pb-4 space-y-2">
-													{/* Title row */}
-													<div className="flex items-start justify-between gap-4">
-														<CardTitle className="text-base sm:text-lg leading-tight">
-															{elemen.nama}
-														</CardTitle>
-
-														<span className="text-sm text-muted-foreground whitespace-nowrap">
-															Bobot {elemen.bobot}%
-														</span>
-													</div>
-
-													{/* Description: Sub Elements */}
-													{elemen.subElemens.length > 0 && (
-														<CardDescription className="space-y-1">
-															{elemen.subElemens.map((subElemen) => (
-																<div
-																	key={subElemen.id}
-																	className="flex items-center gap-2">
-																	<CheckCircle className="h-3.5 w-3.5 text-muted-foreground" />
-																	<span className="text-sm">
-																		{subElemen.nama}
-																	</span>
-																</div>
-															))}
-														</CardDescription>
-													)}
-												</CardHeader>
-
-												{/* ===== CONTENT ===== */}
-												<CardContent>
-													<div
-														className="grid grid-cols-1
-      grid-cols-[1fr_120px]
-      gap-6
-      items-stretch">
-														{/* KIRI: Kriteria */}
-														<div className="space-y-3">
-															{assessmentMode === "kriteria" && (
-																<div className="space-y-2">
-																	<Label className="text-sm font-medium text-muted-foreground">
-																		Pilih Kriteria
-																	</Label>
-
-																	<div className="grid sm:grid-cols-2 gap-2">
-																		{kriterias.map((kriteria) => {
-																			const active =
-																				checkedKriterias[elemen.id] ===
-																				kriteria.id;
-
-																			return (
-																				<button
-																					key={kriteria.id}
-																					type="button"
-																					disabled={isAlreadyAssessed}
-																					onClick={() =>
-																						handleKriteriaCheck(
-																							elemen.id,
-																							kriteria.id,
-																						)
-																					}
-																					className={`
-                    rounded-xl border px-3 py-2 text-sm
-                    flex items-center justify-between
-                    transition
-                    ${
-											active
-												? "border-primary bg-primary/10 text-primary"
-												: "hover:bg-muted/50"
-										}
-                  `}>
-																					<span>{kriteria.nama}</span>
-																					{active && (
-																						<CheckCircle className="h-4 w-4" />
-																					)}
-																				</button>
-																			);
-																		})}
-																	</div>
-																</div>
+									<CardContent className="space-y-6">
+										{/* === BAGIAN 1: PENILAIAN GLOBAL ASPEK === */}
+										<div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+											{/* Kiri: Kriteria (Compact Grid) */}
+											<div className="inline-flex justify-between gap-2 flex-wrap w-full">
+												{kriterias.map((kriteria) => {
+													const active =
+														checkedKriterias[aspek.id] === kriteria.id;
+													return (
+														<button
+															key={kriteria.id}
+															type="button"
+															disabled={isAlreadyAssessed}
+															onClick={() =>
+																handleKriteriaCheck(aspek.id, kriteria.id)
+															}
+															className={`flex flex-1 items-center justify-between px-3 py-2 rounded-lg border text-xs font-semibold transition-all
+              ${
+								active
+									? "border-primary bg-primary text-primary-foreground"
+									: "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+							}`}>
+															<span className="truncate">{kriteria.nama}</span>
+															{active && (
+																<CheckCircle className="h-3 w-3 flex-shrink-0" />
 															)}
+														</button>
+													);
+												})}
+											</div>
+										</div>
+
+										{/* === BAGIAN 2: PENILAIAN PER ELEMEN === */}
+										<div className="space-y-3">
+											<Label className="text-base font-semibold text-slate-700">
+												Rincian Nilai Per Elemen
+											</Label>
+											{aspek.elemens.map((elemen) => (
+												<div
+													key={elemen.id}
+													className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors gap-3">
+													<div className="flex-1 space-y-1">
+														<div className="flex items-center gap-2">
+															<span className="font-medium text-slate-800">
+																{elemen.nama}
+															</span>
 														</div>
 
-														{/* KANAN: Input Nilai */}
-														<div className="flex h-full flex-col items-center justify-center gap-1 ">
-															<p className="text-sm font-semibold text-muted-foreground mb-2">
-																Input Nilai
-															</p>
-															<Input
-																type="number"
-																min={0}
-																max={100}
-																value={scores[elemen.id] ?? ""}
-																disabled={isAlreadyAssessed}
-																onChange={(e) =>
-																	handleScoreChange(
-																		elemen.id,
-																		Number(e.target.value) || 0,
-																	)
-																}
-																className={`
-          w-24 sm:w-28 text-center text-4xl font-bold h-20 rounded-2xl border-2 transition 
-          ${
-						checkedKriterias[elemen.id]
-							? "border-blue ring-2 ring-blue/30"
-							: "border-blue-300"
-					}
-        `}
-															/>
-
-															{checkedKriterias[elemen.id] && (
-																<p className="text-[11px] text-muted-foreground">
-																	Otomatis dari kriteria
-																</p>
-															)}
-														</div>
+														{elemen.subElemens.length > 0 && (
+															<div className="text-xs text-muted-foreground pl-1 space-y-1">
+																{elemen.subElemens.map((sub) => (
+																	<div key={sub.id}>• {sub.nama}</div>
+																))}
+															</div>
+														)}
 													</div>
-												</CardContent>
-											</Card>
-										))}
+
+													<div className="inline-flex">
+														<Input
+															type="number"
+															min={0}
+															max={100}
+															value={elementScores[elemen.id] ?? ""}
+															disabled={isAlreadyAssessed}
+															onChange={(e) =>
+																handleElementScoreChange(
+																	elemen.id,
+																	Number(e.target.value) || 0,
+																)
+															}
+															className="text-center font-bold text-lg"
+															placeholder="0"
+														/>
+													</div>
+												</div>
+											))}
+										</div>
 									</CardContent>
 								</Card>
 							))}
@@ -540,46 +663,80 @@ export default function PenilaianPage() {
 
 					<Card className="rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5">
 						<CardHeader>
-							<CardTitle>Total Nilai</CardTitle>
-							<CardDescription>Nilai akhir penilaian UKK</CardDescription>
+							<CardTitle>Total Nilai UKK</CardTitle>
+							<CardDescription>
+								Rata-rata sederhana dari seluruh nilai elemen
+							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<div className="grid grid-cols-2 gap-6 items-center">
-								{/* TOTAL NILAI */}
-								<div className="text-6xl font-bold text-primary leading-none">
-									{calculateTotalScore().toFixed(2)}
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+								{/* SISI KIRI: Tampilan Skor */}
+								<div className="flex items-center gap-4 p-4 rounded-2xl bg-primary/5 border border-primary/10">
+									<div className="h-14 w-14 rounded-xl bg-primary flex items-center justify-center shadow-lg">
+										<ClipboardCheck className="h-8 w-8 text-white" />
+									</div>
+									<div>
+										<p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+											Skor Akhir Siswa
+										</p>
+										<h3 className="text-4xl font-black text-primary tracking-tight">
+											{calculateTotalScore().toFixed(2)}
+										</h3>
+									</div>
 								</div>
 
-								{/* AKSI */}
-								<Button
-									onClick={handleSave}
-									disabled={
-										isSaving || isAlreadyAssessed || isCheckingAssessment
-									}
-									className="
-      h-20
-      rounded-2xl
-      text-lg font-semibold
-      flex items-center justify-center gap-3
-      focus:scale-105 focus:ring-4
-    ">
-									{isAlreadyAssessed ? (
-										<>
-											<CheckCircle className="h-6 w-6" />
-											Sudah Dinilai
-										</>
-									) : isSaving ? (
-										<>
-											<RefreshCw className="h-6 w-6 animate-spin" />
-											Menyimpan...
-										</>
-									) : (
-										<>
-											<Save className="h-6 w-6" />
-											Simpan Penilaian
-										</>
+								{/* SISI KANAN: Status & Aksi */}
+								<div className="flex flex-col gap-3">
+									{/* Peringatan jika belum lengkap */}
+									{!isAlreadyAssessed && !isAllFilled && (
+										<div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 animate-pulse">
+											<AlertCircle className="h-5 w-5 flex-shrink-0" />
+											<p className="text-xs font-medium leading-tight">
+												Masih ada <strong>{incompleteCount} aspek</strong> yang
+												belum dinilai.
+											</p>
+										</div>
 									)}
-								</Button>
+
+									{/* Tombol Simpan */}
+									<Button
+										onClick={handleSave}
+										disabled={
+											isSaving || isAlreadyAssessed || isCheckingAssessment
+										}
+										className={`
+          h-16 rounded-xl text-md font-bold
+          flex items-center justify-center gap-3
+          transition-all duration-300
+          ${
+						!isAllFilled && !isAlreadyAssessed && !isSaving
+							? "bg-slate-400 hover:bg-slate-500"
+							: "bg-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95"
+					}
+        `}>
+										{isAlreadyAssessed ? (
+											<>
+												<CheckCircle className="h-5 w-5" /> Sudah Dinilai
+											</>
+										) : isSaving ? (
+											<>
+												<RefreshCw className="h-5 w-5 animate-spin" />{" "}
+												Menyimpan...
+											</>
+										) : (
+											<>
+												{isAllFilled ? (
+													<Save className="h-5 w-5" />
+												) : (
+													<AlertTriangle className="h-5 w-5" />
+												)}
+												{isAllFilled
+													? "Simpan Penilaian"
+													: "Simpan (Belum Lengkap)"}
+											</>
+										)}
+									</Button>
+								</div>
 							</div>
 						</CardContent>
 					</Card>

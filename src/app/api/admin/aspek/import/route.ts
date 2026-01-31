@@ -1,191 +1,167 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import * as XLSX from 'xlsx';
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import * as XLSX from "xlsx";
+import { getUser } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
-  try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
+	try {
+		// 1. Ambil User & Validasi Role
+		const user = await getUser();
 
-    if (!file) {
-      return NextResponse.json(
-        { error: 'File tidak ditemukan' },
-        { status: 400 }
-      );
-    }
+		if (!user || user.role !== "ADMIN_JURUSAN") {
+			return NextResponse.json(
+				{
+					error:
+						"Unauthorized. Hanya Admin Jurusan yang dapat melakukan impor.",
+				},
+				{ status: 403 },
+			);
+		}
 
-    console.log('Processing aspek import file:', file.name, file.size);
+		// 2. Ambil Jurusan ID dari relasi Admin Jurusan
+		const adminJurusan = await db.adminJurusan.findFirst({
+			where: { userId: user.id },
+			select: { jurusanId: true },
+		});
 
-    const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+		if (!adminJurusan) {
+			return NextResponse.json(
+				{ error: "Data relasi jurusan admin tidak ditemukan" },
+				{ status: 404 },
+			);
+		}
 
-    console.log('Excel data rows:', jsonData.length);
-    console.log('Sample row data:', JSON.stringify(jsonData.slice(0, 2), null, 2));
+		// Kunci jurusanId untuk seluruh proses import ini
+		const targetJurusanId = adminJurusan.jurusanId;
 
-    // Skip header row, process data
-    const dataRows = jsonData.slice(1);
-    const aspekData: any[] = [];
+		// 3. Proses File Excel
+		const formData = await request.formData();
+		const file = formData.get("file") as File;
 
-    // Get all available jurusans for better error messages
-    const allJurusans = await db.jurusan.findMany();
-    console.log('Available jurusans:', allJurusans.map(j => `${j.kode} (${j.nama})`));
+		if (!file) {
+			return NextResponse.json(
+				{ error: "File tidak ditemukan" },
+				{ status: 400 },
+			);
+		}
 
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i];
-      const [kodeJurusan, namaAspek, namaElemen, bobot, namaSubElemen] = row;
+		const arrayBuffer = await file.arrayBuffer();
+		const workbook = XLSX.read(arrayBuffer, { type: "array" });
+		const sheetName = workbook.SheetNames[0];
+		const worksheet = workbook.Sheets[sheetName];
+		const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+			header: 1,
+		}) as any[][];
 
-      console.log(`Row ${i + 1}:`, { kodeJurusan, namaAspek, namaElemen, bobot, namaSubElemen });
+		// Data dimulai dari baris ke-2 (index 1)
+		const dataRows = jsonData.slice(1);
+		const aspekData: any[] = [];
 
-      if (!kodeJurusan || !namaAspek || !namaElemen || !bobot) {
-        console.log(`Row ${i + 1}: Skipping - missing required data`);
-        continue;
-      }
+		for (let i = 0; i < dataRows.length; i++) {
+			const row = dataRows[i];
 
-      // Find jurusan by kode
-      const jurusan = await db.jurusan.findFirst({
-        where: { kode: kodeJurusan.toString().trim().toUpperCase() },
-      });
+			// STRUKTUR BARU EXCEL:
+			// Index 0: Nama Aspek
+			// Index 1: Nama Elemen
+			// Index 2: Nama Sub Elemen (Opsional)
+			// Kode Jurusan dan Bobot sudah tidak digunakan
 
-      if (!jurusan) {
-        console.log(`Row ${i + 1}: Jurusan not found for kode:`, kodeJurusan);
-        continue;
-      }
+			const [namaAspek, namaElemen, namaSubElemen] = row;
 
-      console.log(`Row ${i + 1}: Found jurusan`, jurusan.nama, `(${jurusan.kode})`);
+			if (!namaAspek || !namaElemen) {
+				continue; // Skip baris jika data utama kosong
+			}
 
-      // Check if aspek already exists
-      const existingAspek = await db.aspekPenilaian.findFirst({
-        where: {
-          nama: namaAspek.toString().trim(),
-          jurusanId: jurusan.id,
-        },
-      });
+			// Cek apakah aspek sudah ada DI JURUSAN INI SAJA
+			const existingAspek = await db.aspekPenilaian.findFirst({
+				where: {
+					nama: namaAspek.toString().trim(),
+					jurusanId: targetJurusanId, // Filter ke jurusan user saja
+				},
+			});
 
-      if (existingAspek) {
-        console.log(`Row ${i + 1}: Aspek already exists, skipping:`, namaAspek);
-        continue;
-      }
+			if (existingAspek) continue; // Skip jika aspek sudah ada
 
-      aspekData.push({
-        nama: namaAspek.toString().trim(),
-        jurusanId: jurusan.id,
-        jurusanKode: jurusan.kode,
-        elemen: namaElemen.toString().trim(),
-        bobot: parseFloat(bobot),
-        subElemen: namaSubElemen ? namaSubElemen.toString().trim() : null,
-      });
-    }
+			aspekData.push({
+				nama: namaAspek.toString().trim(),
+				jurusanId: targetJurusanId, // Gunakan ID jurusan user
+				elemen: namaElemen.toString().trim(),
+				subElemen: namaSubElemen ? namaSubElemen.toString().trim() : null,
+			});
+		}
 
-    console.log('Valid aspek data rows:', aspekData.length);
+		// 4. Grouping Elemen dan Sub-Elemen
+		const groupedAspeks = aspekData.reduce((acc: any, curr: any) => {
+			const key = `${curr.nama}-${curr.jurusanId}`;
+			if (!acc[key]) {
+				acc[key] = {
+					nama: curr.nama,
+					jurusanId: curr.jurusanId,
+					elemens: [],
+				};
+			}
 
-    // Group by aspek
-    const groupedAspeks = aspekData.reduce((acc: any, curr: any) => {
-      const key = `${curr.nama}-${curr.jurusanId}`;
-      if (!acc[key]) {
-        acc[key] = {
-          nama: curr.nama,
-          jurusanId: curr.jurusanId,
-          elemens: [],
-        };
-      }
+			let existingElemen = acc[key].elemens.find(
+				(e: any) => e.nama === curr.elemen,
+			);
 
-      // Check if elemen already exists
-      const existingElemen = acc[key].elemens.find((e: any) => e.nama === curr.elemen);
-      if (existingElemen) {
-        if (curr.subElemen && curr.subElemen.trim()) {
-          existingElemen.subElemens.push({ nama: curr.subElemen });
-        }
-      } else {
-        const elemenData: any = {
-          nama: curr.elemen,
-          bobot: curr.bobot,
-          subElemens: [],
-        };
+			if (existingElemen) {
+				if (curr.subElemen) {
+					existingElemen.subElemens.push({ nama: curr.subElemen });
+				}
+			} else {
+				const elemenData: any = {
+					nama: curr.elemen,
+					subElemens: curr.subElemen ? [{ nama: curr.subElemen }] : [],
+				};
+				acc[key].elemens.push(elemenData);
+			}
+			return acc;
+		}, {});
 
-        if (curr.subElemen && curr.subElemen.trim()) {
-          elemenData.subElemens.push({ nama: curr.subElemen });
-        }
+		const createdAspeks = [];
+		const errors: string[] = [];
 
-        acc[key].elemens.push(elemenData);
-      }
+		// 5. Simpan ke Database
+		for (const key in groupedAspeks) {
+			const aspek = groupedAspeks[key];
 
-      return acc;
-    }, {});
+			try {
+				const created = await db.aspekPenilaian.create({
+					data: {
+						nama: aspek.nama,
+						jurusanId: aspek.jurusanId,
+						elemens: {
+							create: aspek.elemens.map((e: any) => ({
+								nama: e.nama,
+								subElemens:
+									e.subElemens.length > 0
+										? {
+												create: e.subElemens,
+											}
+										: undefined,
+							})),
+						},
+					},
+				});
+				createdAspeks.push(created);
+			} catch (error: any) {
+				console.error(`Error creating aspek ${aspek.nama}:`, error);
+				errors.push(`Aspek "${aspek.nama}": ${error.message}`);
+			}
+		}
 
-    // Validate and create aspeks
-    const createdAspeks = [];
-    const errors: string[] = [];
-    const skippedInfo: string[] = [];
-
-    for (const key in groupedAspeks) {
-      const aspek = groupedAspeks[key];
-
-      // Validate total bobot
-      const totalBobot = aspek.elemens.reduce((sum: number, e: any) => sum + e.bobot, 0);
-      if (totalBobot !== 100) {
-        errors.push(`Aspek "${aspek.nama}" (${aspek.kodeJurusan}): Total bobot ${totalBobot}% (harus 100%)`);
-        continue;
-      }
-
-      console.log('Creating aspek:', aspek.nama, 'with', aspek.elemens.length, 'elemens');
-
-      try {
-        const created = await db.aspekPenilaian.create({
-          data: {
-            nama: aspek.nama,
-            jurusanId: aspek.jurusanId,
-            elemens: {
-              create: aspek.elemens.map((e: any) => ({
-                nama: e.nama,
-                bobot: e.bobot,
-                subElemens: e.subElemens.length > 0 ? {
-                  create: e.subElemens,
-                } : undefined,
-              })),
-            },
-          },
-          include: {
-            elemens: {
-              include: {
-                subElemens: true,
-              },
-            },
-          },
-        });
-
-        createdAspeks.push(created);
-        console.log('Created aspek successfully:', created.nama);
-      } catch (error: any) {
-        console.error('Failed to create aspek:', aspek.nama, error);
-        errors.push(`Aspek "${aspek.nama}" (${aspek.kodeJurusan}): ${error.message || 'Gagal membuat'}`);
-      }
-    }
-
-    // Add info about skipped rows
-    const totalRows = dataRows.length;
-    const skippedRows = totalRows - aspekData.length;
-
-    if (skippedRows > 0) {
-      skippedInfo.push(`${skippedRows} baris dilewati (jurusan tidak ditemukan atau aspek sudah ada)`);
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Berhasil mengimpor ${createdAspeks.length} aspek penilaian`,
-      created: createdAspeks.length,
-      totalRows,
-      skippedRows,
-      skippedInfo: skippedInfo.length > 0 ? skippedInfo : undefined,
-      errors: errors.length > 0 ? errors : undefined,
-    });
-  } catch (error: any) {
-    console.error('Error importing aspek:', error);
-    return NextResponse.json(
-      { error: error.message || 'Gagal mengimpor aspek penilaian' },
-      { status: 500 }
-    );
-  }
+		return NextResponse.json({
+			success: true,
+			message: `Berhasil mengimpor ${createdAspeks.length} aspek penilaian`,
+			created: createdAspeks.length,
+			errors: errors.length > 0 ? errors : undefined,
+		});
+	} catch (error: any) {
+		console.error("Import Error:", error);
+		return NextResponse.json(
+			{ error: error.message || "Gagal mengimpor data" },
+			{ status: 500 },
+		);
+	}
 }
